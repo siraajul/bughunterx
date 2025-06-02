@@ -1,11 +1,11 @@
-export type TestType = 
-  | 'UI Testing' 
-  | 'Functional Testing' 
-  | 'Smoke Testing' 
-  | 'Integration Testing' 
-  | 'API Testing' 
-  | 'Performance Testing' 
-  | 'Security Testing' 
+export type TestType =
+  | 'UI Testing'
+  | 'Functional Testing'
+  | 'Smoke Testing'
+  | 'Integration Testing'
+  | 'API Testing'
+  | 'Performance Testing'
+  | 'Security Testing'
   | 'Regression Testing';
 
 export type Severity = 'Critical' | 'High' | 'Medium' | 'Low';
@@ -32,6 +32,7 @@ export interface TestIssue {
   assignedTo: string;
   dateFixed: string;
   comments: string;
+  projectId: string;
 }
 
 export interface FilterOptions {
@@ -47,4 +48,18 @@ export interface SummaryData {
   byStatus: Record<Status, number>;
   bySeverity: Record<Severity, number>;
   byTestType: Record<TestType, number>;
+}
+
+export type ProjectType = 'Web App' | 'Mobile App' | 'API' | 'Desktop';
+export type ProjectStatus = 'Active' | 'Archived';
+
+export interface Project {
+  id: string;
+  name: string;
+  description?: string;
+  createdDate: string;
+  teamSize: number;
+  status: ProjectStatus;
+  type: ProjectType;
+  issues: TestIssue[];
 }

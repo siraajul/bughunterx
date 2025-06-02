@@ -1,15 +1,14 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
 import { TestIssue, FilterOptions, SummaryData, Status, Severity, Priority, TestType } from '../types';
-import useLocalStorage from '../hooks/useLocalStorage';
-import { generateIssueId } from '../utils/idGenerator';
-import { demoIssues } from '../data/demoIssues';
+import { useProjects } from './ProjectContext';
+import { v4 as uuidv4 } from 'uuid';
 
 interface IssueContextType {
-  issues: TestIssue[];
+  projectIssues: TestIssue[];
   filteredIssues: TestIssue[];
   summaryData: SummaryData;
   filterOptions: FilterOptions;
-  addIssue: (issue: Omit<TestIssue, 'id'>) => void;
+  addIssueToActiveProject: (issue: Omit<TestIssue, 'id' | 'projectId'>) => void;
   updateIssue: (issue: TestIssue) => void;
   deleteIssue: (id: string) => void;
   updateFilters: (filters: Partial<FilterOptions>) => void;
@@ -55,22 +54,28 @@ const defaultSummaryData: SummaryData = {
 const IssueContext = createContext<IssueContextType | undefined>(undefined);
 
 export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [issues, setIssues] = useLocalStorage<TestIssue[]>('sqa-issues', demoIssues);
+  const { activeProject, updateProject } = useProjects();
+  
+  const projectIssues = useMemo(() => activeProject?.issues || [], [activeProject?.issues]);
+
   const [filterOptions, setFilterOptions] = useState<FilterOptions>(defaultFilters);
-  const [filteredIssues, setFilteredIssues] = useState<TestIssue[]>(issues);
+  const [filteredIssues, setFilteredIssues] = useState<TestIssue[]>(projectIssues);
   const [summaryData, setSummaryData] = useState<SummaryData>(defaultSummaryData);
   const [activeTestType, setActiveTestType] = useState<TestType | 'All'>('All');
 
-  // Update filtered issues when issues or filters change
   useEffect(() => {
-    let result = [...issues];
+    if (!projectIssues) {
+        setFilteredIssues([]);
+        setSummaryData(defaultSummaryData);
+        return;
+    }
+
+    let result = [...projectIssues];
     
-    // Filter by test type tab
     if (activeTestType !== 'All') {
       result = result.filter(issue => issue.testType === activeTestType);
     }
     
-    // Apply search filter
     if (filterOptions.search) {
       const searchLower = filterOptions.search.toLowerCase();
       result = result.filter(issue => 
@@ -80,35 +85,27 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       );
     }
     
-    // Apply status filter
     if (filterOptions.status.length > 0) {
       result = result.filter(issue => filterOptions.status.includes(issue.status));
     }
     
-    // Apply severity filter
     if (filterOptions.severity.length > 0) {
       result = result.filter(issue => filterOptions.severity.includes(issue.severity));
     }
     
-    // Apply priority filter
     if (filterOptions.priority.length > 0) {
       result = result.filter(issue => filterOptions.priority.includes(issue.priority));
     }
     
-    // Apply test type filter
     if (filterOptions.testType.length > 0) {
       result = result.filter(issue => filterOptions.testType.includes(issue.testType));
     }
     
     setFilteredIssues(result);
-  }, [issues, filterOptions, activeTestType]);
 
-  // Update summary data when issues change
-  useEffect(() => {
     const newSummaryData = { ...defaultSummaryData };
-    newSummaryData.total = issues.length;
+    newSummaryData.total = projectIssues.length;
     
-    // Reset counts
     Object.keys(newSummaryData.byStatus).forEach(key => {
       newSummaryData.byStatus[key as Status] = 0;
     });
@@ -121,49 +118,76 @@ export const IssueProvider: React.FC<{ children: React.ReactNode }> = ({ childre
       newSummaryData.byTestType[key as TestType] = 0;
     });
     
-    // Count issues by status, severity, and test type
-    issues.forEach(issue => {
+    projectIssues.forEach(issue => {
       newSummaryData.byStatus[issue.status]++;
       newSummaryData.bySeverity[issue.severity]++;
       newSummaryData.byTestType[issue.testType]++;
     });
     
     setSummaryData(newSummaryData);
-  }, [issues]);
 
-  const addIssue = (issue: Omit<TestIssue, 'id'>) => {
-    const newIssue = {
+  }, [projectIssues, filterOptions, activeTestType]);
+
+  const addIssueToActiveProject = useCallback((issue: Omit<TestIssue, 'id' | 'projectId'>) => {
+    if (!activeProject) return;
+
+    const newIssue: TestIssue = {
       ...issue,
-      id: generateIssueId(issue.testType, issues)
+      id: uuidv4(),
+      projectId: activeProject.id,
     };
-    setIssues([...issues, newIssue]);
-  };
 
-  const updateIssue = (updatedIssue: TestIssue) => {
-    setIssues(issues.map(issue => 
+    const updatedProject = {
+      ...activeProject,
+      issues: [...activeProject.issues, newIssue],
+    };
+
+    updateProject(updatedProject);
+  }, [activeProject, updateProject]);
+
+  const updateIssue = useCallback((updatedIssue: TestIssue) => {
+    if (!activeProject) return;
+
+    const updatedIssues = activeProject.issues.map(issue => 
       issue.id === updatedIssue.id ? updatedIssue : issue
-    ));
-  };
+    );
 
-  const deleteIssue = (id: string) => {
-    setIssues(issues.filter(issue => issue.id !== id));
-  };
+    const updatedProject = {
+      ...activeProject,
+      issues: updatedIssues,
+    };
 
-  const updateFilters = (newFilters: Partial<FilterOptions>) => {
+    updateProject(updatedProject);
+  }, [activeProject, updateProject]);
+
+  const deleteIssue = useCallback((id: string) => {
+    if (!activeProject) return;
+
+    const updatedIssues = activeProject.issues.filter(issue => issue.id !== id);
+
+    const updatedProject = {
+      ...activeProject,
+      issues: updatedIssues,
+    };
+
+    updateProject(updatedProject);
+  }, [activeProject, updateProject]);
+
+  const updateFilters = useCallback((newFilters: Partial<FilterOptions>) => {
     setFilterOptions(prev => ({ ...prev, ...newFilters }));
-  };
+  }, []);
 
-  const resetFilters = () => {
+  const resetFilters = useCallback(() => {
     setFilterOptions(defaultFilters);
-  };
+  }, []);
 
   return (
     <IssueContext.Provider value={{
-      issues,
+      projectIssues,
       filteredIssues,
       summaryData,
       filterOptions,
-      addIssue,
+      addIssueToActiveProject,
       updateIssue,
       deleteIssue,
       updateFilters,
