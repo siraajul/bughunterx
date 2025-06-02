@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import IssueTable from '../components/issues/IssueTable';
 import IssueFilters from '../components/issues/IssueFilters';
 import Modal from '../components/common/Modal';
@@ -7,27 +7,14 @@ import { TestIssue } from '../types';
 import { useIssues } from '../contexts/IssueContext';
 import toast from 'react-hot-toast';
 import IssueDetailView from '../components/issues/IssueDetailView';
-import { useProjects } from '../contexts/ProjectContext';
-import { useParams } from 'react-router-dom';
-import { Settings } from 'lucide-react';
-import { Link } from 'react-router-dom';
 
 const IssueTracker: React.FC = () => {
-  const { filteredIssues, addIssueToActiveProject, updateIssue, deleteIssue, activeTestType } = useIssues();
-  const { projects, activeProject, selectProject } = useProjects();
-  const { projectId } = useParams<{ projectId: string }>();
-
+  const { filteredIssues, addIssue, updateIssue, deleteIssue, activeTestType } = useIssues();
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isViewModalOpen, setIsViewModalOpen] = useState(false);
   const [currentIssue, setCurrentIssue] = useState<TestIssue | undefined>(undefined);
   const [issueToView, setIssueToView] = useState<TestIssue | undefined>(undefined);
-
-  useEffect(() => {
-    if (projectId && activeProject?.id !== projectId) {
-      selectProject(projectId);
-    }
-  }, [projectId, activeProject, selectProject]);
 
   const handleOpenAddModal = () => {
     setIsAddModalOpen(true);
@@ -49,7 +36,7 @@ const IssueTracker: React.FC = () => {
   };
 
   const handleAddIssue = (issue: Omit<TestIssue, 'id'>) => {
-    addIssueToActiveProject(issue);
+    addIssue(issue);
     setIsAddModalOpen(false);
     toast.success('Issue added successfully');
   };
@@ -65,30 +52,21 @@ const IssueTracker: React.FC = () => {
     toast.success('Issue deleted successfully');
   };
 
-  if (!activeProject) {
-    return <div className="py-6 text-center text-gray-600">Loading project or project not found...</div>;
-  }
-
   return (
     <div className="py-6">
-      <div className="mb-6 flex items-center justify-between">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">
-            {activeProject.name} - {activeTestType === 'All' ? 'All Issues' : activeTestType}
-          </h2>
-          <p className="text-gray-600">
-            Manage and track testing issues for {activeProject.name}
-          </p>
-        </div>
-        <div className="flex items-center space-x-4">
-          <Link to={`/projects/${activeProject.id}/settings`} className="text-gray-400 hover:text-gray-600">
-            <Settings size={20} />
-          </Link>
-        </div>
+      <div className="mb-6">
+        <h2 className="text-2xl font-bold text-gray-900">
+          {activeTestType === 'All' ? 'All Testing Issues' : activeTestType}
+        </h2>
+        <p className="text-gray-600">
+          Manage and track testing issues
+        </p>
       </div>
       
+      {/* Filters */}
       <IssueFilters />
       
+      {/* Issue Table */}
       <IssueTable 
         issues={filteredIssues}
         onEdit={handleOpenEditModal}
@@ -96,10 +74,11 @@ const IssueTracker: React.FC = () => {
         onView={handleOpenViewModal}
       />
       
+      {/* Add Issue Modal */}
       <Modal
         isOpen={isAddModalOpen}
         onClose={() => setIsAddModalOpen(false)}
-        title={`Add New Issue for ${activeProject.name}`}
+        title="Add New Issue"
         size="xl"
       >
         <IssueForm
@@ -108,6 +87,7 @@ const IssueTracker: React.FC = () => {
         />
       </Modal>
       
+      {/* Edit Issue Modal */}
       <Modal
         isOpen={isEditModalOpen}
         onClose={() => setIsEditModalOpen(false)}
@@ -121,6 +101,7 @@ const IssueTracker: React.FC = () => {
         />
       </Modal>
 
+      {/* View Issue Modal */}
       <Modal
         isOpen={isViewModalOpen}
         onClose={handleCloseViewModal}
